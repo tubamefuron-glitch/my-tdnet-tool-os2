@@ -1,50 +1,43 @@
 import streamlit as st
-import pandas as pd
 import urllib.parse
 
-st.set_page_config(page_title="TDnetキーワード検索(Google版)", layout="wide")
+st.set_page_config(page_title="TDnetキーワード検索(爆速版)", layout="wide")
 st.title("🔍 TDnet PDFキーワード横断検索ツール")
-st.caption("TDnet直結が制限されているため、Googleのインデックスを利用する安定版です")
+
+st.info("TDnetのPDF内をGoogleの検索エンジンを使って直接検索します。")
 
 with st.sidebar:
     st.header("検索条件")
+    # キーワードをより柔軟に（デフォルトを少し広めに設定）
     keyword = st.text_input("検索するキーワード", value="増産")
     
-    st.subheader("期間指定")
-    duration = st.selectbox("期間", 
-        ["指定なし", "過去24時間", "過去1週間", "過去1ヶ月"], index=1)
-    
-    search_button = st.button("検索用リンクを生成")
+    st.subheader("検索のコツ")
+    st.write("ヒットしない場合は、単語を短くしてみてください（例：『上方修正』『受注好調』など）")
 
-# Google検索用URLの構築
-def get_google_search_url(kw, dur):
-    # site:release.tdnet.info でTDnet内だけに絞る
-    query = f'site:release.tdnet.info "{kw}" filetype:pdf'
-    base_url = "https://www.google.com/search?q="
-    
-    # 期間フィルターのパラメータ
-    tbs = ""
-    if dur == "過去24時間": tbs = "&tbs=qdr:d"
-    elif dur == "過去1週間": tbs = "&tbs=qdr:w"
-    elif dur == "過去1ヶ月": tbs = "&tbs=qdr:m"
-    
-    return base_url + urllib.parse.quote(query) + tbs
+# 最もヒットしやすい検索クエリを作成
+# TDnetのドメイン内で、キーワードが含まれるページを探す
+query = f'site:release.tdnet.info {keyword}'
+search_url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
 
-if search_button:
-    search_url = get_google_search_url(keyword, duration)
-    
-    st.success(f"キーワード「{keyword}」の検索準備ができました！")
-    
-    st.markdown(f"""
-    ### 🚀 以下のボタンから結果を確認してください
-    Googleの高度な検索エンジンを使って、TDnet内のPDFからキーワードを抽出します。
-    
-    [👉 GoogleでTDnet内の「{keyword}」を検索する]({search_url})
-    """)
-    
-    st.info("""
-    **【この方法のメリット】**
-    * TDnetのサーバーからブロックされません。
-    * GoogleのAIがPDFの中身をすでに解析しているため、検索が非常に高速です。
-    * 24時間以内の新着情報も「期間指定」で絞り込めます。
-    """)
+# メイン画面
+st.subheader(f"「{keyword}」の検索準備完了")
+
+# 大きなボタンでガイド
+st.markdown(f"""
+<a href="{search_url}" target="_blank" style="text-decoration: none;">
+    <div style="background-color: #ff4b4b; color: white; padding: 20px; text-align: center; border-radius: 10px; font-size: 24px; font-weight: bold;">
+        ここをクリックして検索結果を見る
+    </div>
+</a>
+""", unsafe_allow_html=True)
+
+st.write("")
+st.warning("※クリックすると別タブでGoogleが開きます。TDnetに直接アクセスしてブロックされる心配がありません。")
+
+st.markdown("""
+---
+### なぜこのツールを使うのか？
+1. **ブロック回避**: StreamlitサーバーがTDnetに弾かれる問題を100%回避します。
+2. **PDF解析**: Googleが既に中身を読み取っているPDFが優先的に表示されます。
+3. **最新性**: Googleの「ツール」機能を使えば、検索後に「1週間以内」などの絞り込みも簡単です。
+""")
