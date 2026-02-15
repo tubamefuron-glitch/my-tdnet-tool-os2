@@ -1,111 +1,50 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
-import pdfplumber
-import io
 import pandas as pd
-import time
-import random
+import urllib.parse
 
-st.set_page_config(page_title="TDnet横断検索ツール", layout="wide")
+st.set_page_config(page_title="TDnetキーワード検索(Google版)", layout="wide")
 st.title("🔍 TDnet PDFキーワード横断検索ツール")
-
-# ヘッダーをより本物のブラウザに近づける
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-}
+st.caption("TDnet直結が制限されているため、Googleのインデックスを利用する安定版です")
 
 with st.sidebar:
     st.header("検索条件")
     keyword = st.text_input("検索するキーワード", value="増産")
-    search_limit = st.slider("チェック件数（新着順）", 10, 100, 30)
-    search_button = st.button("検索実行")
-
-@st.cache_data(ttl=600)
-def get_tdnet_list():
-    # 本日の開示一覧URL
-    url = "https://www.release.tdnet.info/inbs/I_main_00.html"
     
-    for attempt in range(3): # 3回までリトライする
-        try:
-            time.sleep(random.uniform(1, 3)) # 人間っぽく少し待つ
-            res = requests.get(url, headers=HEADERS, timeout=20)
-            if res.status_code != 200:
-                continue
-                
-            res.encoding = res.apparent_encoding
-            soup = BeautifulSoup(res.text, "html.parser")
-            items = []
-            
-            # テーブルの取得をより確実に
-            table = soup.select_one("#main-list-table")
-            if not table:
-                continue
-                
-            rows = table.find_all("tr")
-            for row in rows:
-                cols = row.find_all("td")
-                if len(cols) < 5: continue
-                
-                title_tag = cols[3].find("a")
-                if title_tag and title_tag.get("href"):
-                    items.append({
-                        "時刻": cols[0].text.strip(),
-                        "コード": cols[1].text.strip(),
-                        "社名": cols[2].text.strip(),
-                        "タイトル": title_tag.text.strip(),
-                        "URL": "https://www.release.tdnet.info/inbs/" + title_tag.get("href")
-                    })
-            if items:
-                return items
-        except Exception as e:
-            print(f"Error on attempt {attempt}: {e}")
-            time.sleep(2)
-            
-    return []
+    st.subheader("期間指定")
+    duration = st.selectbox("期間", 
+        ["指定なし", "過去24時間", "過去1週間", "過去1ヶ月"], index=1)
+    
+    search_button = st.button("検索用リンクを生成")
 
-def search_in_pdf(url, kw):
-    try:
-        # PDF取得時も少し待機
-        time.sleep(random.uniform(0.5, 1.0))
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        if response.status_code == 200:
-            with pdfplumber.open(io.BytesIO(response.content)) as pdf:
-                for i, page in enumerate(pdf.pages):
-                    text = page.extract_text()
-                    if text and kw in text:
-                        return i + 1
-    except:
-        pass
-    return None
+# Google検索用URLの構築
+def get_google_search_url(kw, dur):
+    # site:release.tdnet.info でTDnet内だけに絞る
+    query = f'site:release.tdnet.info "{kw}" filetype:pdf'
+    base_url = "https://www.google.com/search?q="
+    
+    # 期間フィルターのパラメータ
+    tbs = ""
+    if dur == "過去24時間": tbs = "&tbs=qdr:d"
+    elif dur == "過去1週間": tbs = "&tbs=qdr:w"
+    elif dur == "過去1ヶ月": tbs = "&tbs=qdr:m"
+    
+    return base_url + urllib.parse.quote(query) + tbs
 
 if search_button:
-    all_items = get_tdnet_list()
-    if not all_items:
-        st.error("現在、TDnetからデータを取得できません。サイト側で一時的に制限がかかっているか、メンテナンス中の可能性があります。数分後に再度お試しください。")
-    else:
-        target_items = all_items[:search_limit]
-        st.info(f"最新 {len(target_items)} 件を取得しました。キーワード「{keyword}」をスキャン中...")
-        
-        results = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for idx, item in enumerate(target_items):
-            progress_bar.progress((idx + 1) / len(target_items))
-            status_text.text(f"調査中: {item['社名']} ({idx+1}/{len(target_items)})")
-            
-            page_found = search_in_pdf(item["URL"], keyword)
-            if page_found:
-                item["ページ"] = page_found
-                results.append(item)
-        
-        status_text.empty()
-        if results:
-            st.success(f"【的中】 {len(results)} 件の資料が見つかりました！")
-            df = pd.DataFrame(results)
-            st.dataframe(df, column_config={"URL": st.column_config.LinkColumn()})
-        else:
-            st.warning(f"「{keyword}」は見つかりませんでした。別の言葉で試してみてください。")
+    search_url = get_google_search_url(keyword, duration)
+    
+    st.success(f"キーワード「{keyword}」の検索準備ができました！")
+    
+    st.markdown(f"""
+    ### 🚀 以下のボタンから結果を確認してください
+    Googleの高度な検索エンジンを使って、TDnet内のPDFからキーワードを抽出します。
+    
+    [👉 GoogleでTDnet内の「{keyword}」を検索する]({search_url})
+    """)
+    
+    st.info("""
+    **【この方法のメリット】**
+    * TDnetのサーバーからブロックされません。
+    * GoogleのAIがPDFの中身をすでに解析しているため、検索が非常に高速です。
+    * 24時間以内の新着情報も「期間指定」で絞り込めます。
+    """)
